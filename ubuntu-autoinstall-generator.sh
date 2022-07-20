@@ -27,7 +27,7 @@ function die() {
 
 usage() {
         cat <<EOF
-Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-a] [-e] [-u user-data-file] [-m meta-data-file] [-k] [-c] [-r] [-s source-iso-file] [-d destination-iso-file]
+Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-a] [-e] [-u user-data-file] [-m meta-data-file] [-k] [-c] [-i] [-r] [-s source-iso-file] [-d destination-iso-file]
 
 💁 This script will create fully-automated Ubuntu 20.04 Focal Fossa installation media.
 
@@ -49,6 +49,7 @@ Available options:
                         downloaded and saved in ${script_dir}. The Ubuntu signing key will be downloaded and
                         saved in a new keyring in ${script_dir}
 -c, --no-md5            Disable MD5 checksum on boot
+-i, --no-fsck           Disable integrity check on boot
 -r, --use-release-iso   Use the current release ISO instead of the daily ISO. The file will be used if it already
                         exists.
 -s, --source            Source ISO file. By default the latest daily ISO for Ubuntu 20.04 will be downloaded
@@ -74,6 +75,7 @@ function parse_params() {
         all_in_one=0
         use_hwe_kernel=0
         md5_checksum=1
+        skip_integrity_check=0
         use_release_iso=0
 
         while :; do
@@ -84,6 +86,7 @@ function parse_params() {
                 -e | --use-hwe-kernel) use_hwe_kernel=1 ;;
                 -c | --no-md5) md5_checksum=0 ;;
                 -k | --no-verify) gpg_verify=0 ;;
+                -i | --no-fsck) skip_integrity_check=1 ;;
                 -r | --use-release-iso) use_release_iso=1 ;;
                 -u | --user-data)
                         user_data_file="${2-}"
@@ -225,6 +228,15 @@ if [ ${use_hwe_kernel} -eq 1 ]; then
         else
                 log "⚠️ This source ISO does not support the HWE kernel. Proceeding with the regular kernel."
         fi
+fi
+
+
+if [ ${skip_integrity_check} -eq 1 ]; then
+        log "🧩 Adding skip integrity check parameter to kernel command line..."
+        sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/isolinux/txt.cfg"
+        sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/boot/grub/grub.cfg"
+        sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/boot/grub/loopback.cfg"
+        log "👍 Added parameter to UEFI and BIOS kernel command lines."
 fi
 
 log "🧩 Adding autoinstall parameter to kernel command line..."
