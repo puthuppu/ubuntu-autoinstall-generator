@@ -67,19 +67,16 @@ function parse_params() {
         # default values of variables set from params
         user_data_file=''
         meta_data_file=''
+        image_type='22.04'
         download_url="https://cdimage.ubuntu.com/ubuntu-server/jammy/daily-live/current"
         download_iso="jammy-live-server-amd64.iso"
-        original_iso="ubuntu-original-${today}.iso"
-        source_iso="${script_dir}/${original_iso}"
         destination_iso="${script_dir}/ubuntu-autoinstall-${today}.iso"
-        sha_suffix="${today}"
         gpg_verify=1
         all_in_one=0
         use_hwe_kernel=0
         md5_checksum=1
         skip_integrity_check=0
         use_release_iso=0
-        image_type='22.04'
 
         while :; do
                 case "${1-}" in
@@ -109,29 +106,28 @@ function parse_params() {
                         ;;
                 -I | --image-type)
                         case "${2-}" in
-                        nobel|jammy|focal|24.04|22.04|20.04|2404|2204|2004)
+                        noble|jammy|focal|24.04|22.04|20.04|2404|2204|2004)
                                 case "${2-}" in
-                                24.04 | 2404)
-                                        image_type="nobel"
+                                noble | 24.04 | 2404)
+                                        image_type="noble"
                                         download_url="https://cdimage.ubuntu.com/ubuntu-server/daily-live/current"
-                                        download_iso="nobel-live-server-amd64.iso"
+                                        download_iso="noble-live-server-amd64.iso"
                                         ;;
-                                22.04 | 2204)
+                                jammy | 22.04 | 2204)
                                         image_type="jammy"
                                         download_url="https://cdimage.ubuntu.com/ubuntu-server/jammy/daily-live/current"
                                         download_iso="jammy-live-server-amd64.iso"
                                         ;;
-                                20.04 | 2004)
+                                focal | 20.04 | 2004)
                                         image_type="focal"
-                                        download_url="https://cdimage.ubuntu.com/ubuntu-server/focal/daily-live/current"
-                                        download_iso="focal-live-server-amd64.iso"
+                                        use_release_iso=1
                                         ;;
                                 *) image_type="${2-}" ;;
                                 esac
                                 shift
                                 ;;
                         *)
-                                die "Invalid image type: ${2-}. Accepted values are nobel, jammy, focal, 24.04, 22.04, 20.04, 2404, 2204, or 2004."
+                                die "Invalid image type: ${2-}. Accepted values are noble, jammy, focal, 24.04, 22.04, 20.04, 2404, 2204, or 2004."
                                 ;;
                         esac
                         ;;
@@ -141,11 +137,15 @@ function parse_params() {
                 shift
         done
 
+        original_iso="ubuntu-original-${image_type}-${today}.iso"
+        source_iso="${script_dir}/${original_iso}"
+        sha_suffix="${image_type}-${today}"
+
         log "👶 Starting up..."
 
         # check required params and arguments
         if [[ -n "${use_release_iso}" || (-z "${source_iso}" && -z "${use_release_iso}") ]]; then
-                [[ -z "${image_type}" ]] && die "💥 image type not defined. Accepted values are nobel, jammy, focal, 24.04, 22.04, 20.04, 2404, 2204, or 2004."
+                [[ -z "${image_type}" ]] && die "💥 image type not defined. Accepted values are noble, jammy, focal, 24.04, 22.04, 20.04, 2404, 2204, or 2004."
         fi
 
         if [ ${all_in_one} -ne 0 ]; then
