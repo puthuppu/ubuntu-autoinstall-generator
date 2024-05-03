@@ -327,7 +327,7 @@ cd "${tmpdir}"
 if [ ${is_isolinux} = true ]; then
         xorriso -as mkisofs -r -V "ubuntu-autoinstall-${today}" -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -boot-info-table -input-charset utf-8 -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat -o "${destination_iso}" . &>/dev/null
 else
-        sudo xorriso -as mkisofs -r -V "ubuntu-autoinstall-${today}" --grub2-mbr "${tmpdir}/boot/1-Boot-NoEmul.img" -partition_offset 16 --mbr-force-bootable -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b "${tmpdir}/boot/2-Boot-NoEmul.img" -appended_part_as_gpt -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 -c "boot.catalog" -b "boot/grub/i386-pc/eltorito.img" -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info -eltorito-alt-boot -e '--interval:appended_partition_2:::' -no-emul-boot -o "${destination_iso}" . &>/dev/null
+        xorriso -as mkisofs -r -V "ubuntu-autoinstall-${today}" --grub2-mbr "${tmpdir}/boot/1-Boot-NoEmul.img" -partition_offset 16 --mbr-force-bootable -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b "${tmpdir}/boot/2-Boot-NoEmul.img" -appended_part_as_gpt -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 -c "boot.catalog" -b "boot/grub/i386-pc/eltorito.img" -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info -eltorito-alt-boot -e '--interval:appended_partition_2:::' -no-emul-boot -o "${destination_iso}" . &>/dev/null
 fi
 
 cd "$OLDPWD"
