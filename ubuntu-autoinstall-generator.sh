@@ -111,9 +111,21 @@ function parse_params() {
                         case "${2-}" in
                         nobel|jammy|focal|24.04|22.04|20.04|2404|2204|2004)
                                 case "${2-}" in
-                                24.04 | 2404) image_type="nobel" ;;
-                                22.04 | 2204) image_type="jammy" ;;
-                                20.04 | 2004) image_type="focal" ;;
+                                24.04 | 2404)
+                                        image_type="nobel"
+                                        download_url="https://cdimage.ubuntu.com/ubuntu-server/daily-live/current"
+                                        download_iso="nobel-live-server-amd64.iso"
+                                        ;;
+                                22.04 | 2204)
+                                        image_type="jammy"
+                                        download_url="https://cdimage.ubuntu.com/ubuntu-server/jammy/daily-live/current"
+                                        download_iso="jammy-live-server-amd64.iso"
+                                        ;;
+                                20.04 | 2004)
+                                        image_type="focal"
+                                        download_url="https://cdimage.ubuntu.com/ubuntu-server/focal/daily-live/current"
+                                        download_iso="focal-live-server-amd64.iso"
+                                        ;;
                                 *) image_type="${2-}" ;;
                                 esac
                                 shift
