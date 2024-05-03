@@ -27,7 +27,7 @@ function die() {
 
 usage() {
         cat <<EOF
-Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-a] [-e] [-u user-data-file] [-m meta-data-file] [-k] [-c] [-i] [-r] [-s source-iso-file] [-d destination-iso-file]
+Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-a] [-e] [-u user-data-file] [-m meta-data-file] [-k] [-c] [-i] [-r] [-s source-iso-file] [-d destination-iso-file] [-I image-type]
 
 💁 This script will create fully-automated Ubuntu installation media.
 Focal, Jammy, and Nobel are supported.
@@ -58,7 +58,7 @@ Available options:
                         That file will be used by default if it already exists.
 -d, --destination       Destination ISO file. By default ${script_dir}/ubuntu-autoinstall-${today}.iso will be
                         created, overwriting any existing file.
--i, --image-type        Select major release when using parameters -r, --use-release-iso or not using -s, --source.
+-I, --image-type        Select major release when using parameters -r, --use-release-iso or not using -s, --source.
 EOF
         exit
 }
@@ -107,7 +107,7 @@ function parse_params() {
                         meta_data_file="${2-}"
                         shift
                         ;;
-                -i | --image-type)
+                -I | --image-type)
                         case "${2-}" in
                         nobel|jammy|focal|24.04|22.04|20.04|2404|2204|2004)
                                 case "${2-}" in
