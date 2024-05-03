@@ -27,10 +27,9 @@ function die() {
 
 usage() {
         cat <<EOF
-Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-a] [-e] [-u user-data-file] [-m meta-data-file] [-k] [-i] [--focal] [--noble] [-c] [-r] [-s source-iso-file] [-d destination-iso-file]
+Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-a] [-e] [-u user-data-file] [-m meta-data-file] [-k] [-c] [-i] [-r] [-s source-iso-file] [-d destination-iso-file]
 
-💁 This script will create fully-automated Ubuntu 22.04 Jammy Jellyfish installation media.
-By default, Ubuntu 22.04 images are created, but Ubuntu 20.04 and Ubuntu 24.04 are available as well.
+💁 This script will create fully-automated Ubuntu 20.04 Focal Fossa installation media.
 
 Available options:
 
@@ -51,8 +50,6 @@ Available options:
                         saved in a new keyring in ${script_dir}
 -c, --no-md5            Disable MD5 checksum on boot
 -i, --no-fsck           Disable integrity check on boot
-    --focal             Create installation media for Ubuntu 20.04 Focal Fossa
-    --noble             Create installation media for Ubuntu 24.04 Noble Numbat
 -r, --use-release-iso   Use the current release ISO instead of the daily ISO. The file will be used if it already
                         exists.
 -s, --source            Source ISO file. By default the latest daily ISO for Ubuntu 20.04 will be downloaded
@@ -68,26 +65,23 @@ function parse_params() {
         # default values of variables set from params
         user_data_file=''
         meta_data_file=''
-        ubuntu_code_name="jammy"
-        ubuntu_version="22.04"
-        download_version="22\.04"
-        download_url="https://cdimage.ubuntu.com/ubuntu-server/${ubuntu_code_name}/daily-live/current"
-        destination_iso="${script_dir}/ubuntu-autoinstall-${ubuntu_version}-${today}.iso"
+        download_url="https://cdimage.ubuntu.com/ubuntu-server/focal/daily-live/current"
+        download_iso="focal-live-server-amd64.iso"
+        original_iso="ubuntu-original-$today.iso"
+        source_iso="${script_dir}/${original_iso}"
+        destination_iso="${script_dir}/ubuntu-autoinstall-$today.iso"
+        sha_suffix="${today}"
         gpg_verify=1
         all_in_one=0
         use_hwe_kernel=0
         md5_checksum=1
         skip_integrity_check=0
         use_release_iso=0
-        focal=0
-        noble=0
 
         while :; do
                 case "${1-}" in
                 -h | --help) usage ;;
                 -v | --verbose) set -x ;;
-                --focal) focal=1;;
-                --noble) noble=1;;
                 -a | --all-in-one) all_in_one=1 ;;
                 -e | --use-hwe-kernel) use_hwe_kernel=1 ;;
                 -c | --no-md5) md5_checksum=0 ;;
@@ -125,34 +119,14 @@ function parse_params() {
                 [[ -n "${meta_data_file}" ]] && [[ ! -f "$meta_data_file" ]] && die "💥 meta-data file could not be found."
         fi
 
-        if [ "${focal}" -eq 1 ]; then
-                ubuntu_code_name="focal"
-                ubuntu_version="20.04"
-                download_version="20\.04"
-                download_url="https://cdimage.ubuntu.com/ubuntu-server/${ubuntu_code_name}/daily-live/current"
-                use_release_iso=1
-        fi
-
-        if [ "${noble}" -eq 1 ]; then
-                ubuntu_code_name="noble"
-                ubuntu_version="24.04"
-                download_version="24\.04"
-                download_url="https://cdimage.ubuntu.com/ubuntu-server/daily-live/current"
-        fi
-
-        download_iso="${ubuntu_code_name}-live-server-amd64.iso"
-        original_iso="ubuntu-${ubuntu_code_name}-original-${today}.iso"
-        source_iso="${script_dir}/${original_iso}"
-        sha_suffix="${ubuntu_version}-${today}"
-
         if [ "${source_iso}" != "${script_dir}/${original_iso}" ]; then
                 [[ ! -f "${source_iso}" ]] && die "💥 Source ISO file could not be found."
         fi
 
         if [ "${use_release_iso}" -eq 1 ]; then
-                download_url="https://releases.ubuntu.com/${ubuntu_code_name}"
+                download_url="https://releases.ubuntu.com/focal"
                 log "🔎 Checking for current release..."
-                download_iso=$(curl -sSL "${download_url}" | grep -oP "ubuntu-${download_version}\.\d*-live-server-amd64\.iso" | head -n 1)
+                download_iso=$(curl -sSL "${download_url}" | grep -oP 'ubuntu-20\.04\.\d*-live-server-amd64\.iso' | head -n 1)
                 original_iso="${download_iso}"
                 source_iso="${script_dir}/${download_iso}"
                 current_release=$(echo "${download_iso}" | cut -f2 -d-)
@@ -183,15 +157,11 @@ log "🔎 Checking for required utilities..."
 [[ ! -x "$(command -v sed)" ]] && die "💥 sed is not installed. On Ubuntu, install the 'sed' package."
 [[ ! -x "$(command -v curl)" ]] && die "💥 curl is not installed. On Ubuntu, install the 'curl' package."
 [[ ! -x "$(command -v gpg)" ]] && die "💥 gpg is not installed. On Ubuntu, install the 'gpg' package."
-if [ ${focal} -eq 1 ]; then
-        [[ ! -f "/usr/lib/ISOLINUX/isohdpfx.bin" ]] && die "💥 isolinux is not installed. On Ubuntu, install the 'isolinux' package."
-else
-        [[ ! -x "$(command -v fdisk)" ]] && die "💥 fdisk is not installed. On Ubuntu, install the 'fdisk' package."
-fi
+[[ ! -f "/usr/lib/ISOLINUX/isohdpfx.bin" ]] && die "💥 isolinux is not installed. On Ubuntu, install the 'isolinux' package."
 log "👍 All required utilities are installed."
 
 if [ ! -f "${source_iso}" ]; then
-        log "🌎 Downloading ISO image for Ubuntu ${ubuntu_version} ${ubuntu_code_name}..."
+        log "🌎 Downloading ISO image for Ubuntu 20.04 Focal Fossa..."
         curl -NsSL "${download_url}/${download_iso}" -o "${source_iso}"
         log "👍 Downloaded and saved to ${source_iso}"
 else
@@ -246,22 +216,11 @@ chmod -R u+w "$tmpdir"
 rm -rf "$tmpdir/"'[BOOT]'
 log "👍 Extracted to $tmpdir"
 
-if [ ${focal} -eq 0 ]; then
-        log "🔧 Extracting EFI images from image..."
-        efi_start=$(fdisk -o Start,Type -l "${source_iso}" | grep -oP '\d+(?=\s+EFI.System)')
-        efi_length=$(fdisk -o Sectors,Type -l "${source_iso}" | grep -oP '\d+(?=\s+EFI.System)')
-        dd if=${source_iso} bs=512 skip=${efi_start} count=${efi_length} of=${source_iso}-efi.img
-        dd if=${source_iso} bs=1 count=432 of=${source_iso}-hybrid.img
-        log "👍 Extracted EFI images"
-fi
-
 if [ ${use_hwe_kernel} -eq 1 ]; then
         if grep -q "hwe-vmlinuz" "$tmpdir/boot/grub/grub.cfg"; then
                 log "☑️ Destination ISO will use HWE kernel."
-                if [ ${focal} -eq 1 ]; then
-                        sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "$tmpdir/isolinux/txt.cfg"
-                        sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "$tmpdir/isolinux/txt.cfg"
-                fi
+                sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "$tmpdir/isolinux/txt.cfg"
+                sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "$tmpdir/isolinux/txt.cfg"
                 sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "$tmpdir/boot/grub/grub.cfg"
                 sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "$tmpdir/boot/grub/grub.cfg"
                 sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "$tmpdir/boot/grub/loopback.cfg"
@@ -274,18 +233,14 @@ fi
 
 if [ ${skip_integrity_check} -eq 1 ]; then
         log "🧩 Adding skip integrity check parameter to kernel command line..."
-        if [ ${focal} -eq 1 ]; then
-                sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/isolinux/txt.cfg"
-        fi
+        sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/isolinux/txt.cfg"
         sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/boot/grub/grub.cfg"
         sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/boot/grub/loopback.cfg"
         log "👍 Added parameter to UEFI and BIOS kernel command lines."
 fi
 
 log "🧩 Adding autoinstall parameter to kernel command line..."
-if [ ${focal} -eq 1 ]; then
-        sed -i -e 's/---/ autoinstall  ---/g' "$tmpdir/isolinux/txt.cfg"
-fi
+sed -i -e 's/---/ autoinstall  ---/g' "$tmpdir/isolinux/txt.cfg"
 sed -i -e 's/---/ autoinstall  ---/g' "$tmpdir/boot/grub/grub.cfg"
 sed -i -e 's/---/ autoinstall  ---/g' "$tmpdir/boot/grub/loopback.cfg"
 log "👍 Added parameter to UEFI and BIOS kernel command lines."
@@ -299,9 +254,7 @@ if [ ${all_in_one} -eq 1 ]; then
         else
                 touch "$tmpdir/nocloud/meta-data"
         fi
-        if [ ${focal} -eq 1 ]; then
-                sed -i -e 's,---, ds=nocloud;s=/cdrom/nocloud/  ---,g' "$tmpdir/isolinux/txt.cfg"
-        fi
+        sed -i -e 's,---, ds=nocloud;s=/cdrom/nocloud/  ---,g' "$tmpdir/isolinux/txt.cfg"
         sed -i -e 's,---, ds=nocloud\\\;s=/cdrom/nocloud/  ---,g' "$tmpdir/boot/grub/grub.cfg"
         sed -i -e 's,---, ds=nocloud\\\;s=/cdrom/nocloud/  ---,g' "$tmpdir/boot/grub/loopback.cfg"
         log "👍 Added data and configured kernel command line."
@@ -322,33 +275,7 @@ fi
 
 log "📦 Repackaging extracted files into an ISO image..."
 cd "$tmpdir"
-if [ ${focal} -eq 1 ]; then
-        xorriso -as mkisofs -r \
-        -V "ubuntu-auto-focal-$today" \
-        -J \
-        -b isolinux/isolinux.bin \
-        -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 \
-        -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -boot-info-table -input-charset utf-8 \
-        -eltorito-alt-boot \
-        -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat \
-        -o "${destination_iso}" \
-        . #&>/dev/null
-else
-        xorriso -as mkisofs -r \
-        -V "ubuntu-auto-${ubuntu_code_name}-$today" \
-        --grub2-mbr "${source_iso}-hybrid.img" \
-        -partition_offset 16 --mbr-force-bootable  \
-        -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b "${source_iso}-efi.img" \
-        -appended_part_as_gpt \
-        -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 \
-        -c '/boot.catalog' \
-        -b '/boot/grub/i386-pc/eltorito.img' \
-        -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \
-        -eltorito-alt-boot -e '--interval:appended_partition_2:::' \
-        -no-emul-boot \
-        -o "${destination_iso}" \
-        . #&>/dev/null
-fi
+xorriso -as mkisofs -r -V "ubuntu-autoinstall-$today" -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -boot-info-table -input-charset utf-8 -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat -o "${destination_iso}" . &>/dev/null
 cd "$OLDPWD"
 log "👍 Repackaged into ${destination_iso}"
 
