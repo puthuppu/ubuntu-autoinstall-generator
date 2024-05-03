@@ -4,8 +4,8 @@ set -Eeuo pipefail
 function cleanup() {
         trap - SIGINT SIGTERM ERR EXIT
         if [ -n "${tmpdir+x}" ]; then
-                rm -rf "$tmpdir"
-                log "🚽 Deleted temporary working directory $tmpdir"
+                rm -rf "${tmpdir}"
+                log "🚽 Deleted temporary working directory ${tmpdir}"
         fi
 }
 
@@ -29,7 +29,8 @@ usage() {
         cat <<EOF
 Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-a] [-e] [-u user-data-file] [-m meta-data-file] [-k] [-c] [-i] [-r] [-s source-iso-file] [-d destination-iso-file]
 
-💁 This script will create fully-automated Ubuntu 20.04 Focal Fossa installation media.
+💁 This script will create fully-automated Ubuntu installation media.
+Focal, Jammy, and Nobel are supported.
 
 Available options:
 
@@ -43,8 +44,8 @@ Available options:
                         by early Ubuntu 20.04 release ISOs.
 -u, --user-data         Path to user-data file. Required if using -a
 -m, --meta-data         Path to meta-data file. Will be an empty file if not specified and using -a
--k, --no-verify         Disable GPG verification of the source ISO file. By default SHA256SUMS-$today and
-                        SHA256SUMS-$today.gpg in ${script_dir} will be used to verify the authenticity and integrity
+-k, --no-verify         Disable GPG verification of the source ISO file. By default SHA256SUMS-${today} and
+                        SHA256SUMS-${today}.gpg in ${script_dir} will be used to verify the authenticity and integrity
                         of the source ISO file. If they are not present the latest daily SHA256SUMS will be
                         downloaded and saved in ${script_dir}. The Ubuntu signing key will be downloaded and
                         saved in a new keyring in ${script_dir}
@@ -53,10 +54,11 @@ Available options:
 -r, --use-release-iso   Use the current release ISO instead of the daily ISO. The file will be used if it already
                         exists.
 -s, --source            Source ISO file. By default the latest daily ISO for Ubuntu 20.04 will be downloaded
-                        and saved as ${script_dir}/ubuntu-original-$today.iso
+                        and saved as ${script_dir}/ubuntu-original-${today}.iso
                         That file will be used by default if it already exists.
--d, --destination       Destination ISO file. By default ${script_dir}/ubuntu-autoinstall-$today.iso will be
+-d, --destination       Destination ISO file. By default ${script_dir}/ubuntu-autoinstall-${today}.iso will be
                         created, overwriting any existing file.
+-i, --image-type        Select major release when using parameters -r, --use-release-iso or not using -s, --source.
 EOF
         exit
 }
@@ -65,11 +67,11 @@ function parse_params() {
         # default values of variables set from params
         user_data_file=''
         meta_data_file=''
-        download_url="https://cdimage.ubuntu.com/ubuntu-server/focal/daily-live/current"
-        download_iso="focal-live-server-amd64.iso"
-        original_iso="ubuntu-original-$today.iso"
+        download_url="https://cdimage.ubuntu.com/ubuntu-server/jammy/daily-live/current"
+        download_iso="jammy-live-server-amd64.iso"
+        original_iso="ubuntu-original-${today}.iso"
         source_iso="${script_dir}/${original_iso}"
-        destination_iso="${script_dir}/ubuntu-autoinstall-$today.iso"
+        destination_iso="${script_dir}/ubuntu-autoinstall-${today}.iso"
         sha_suffix="${today}"
         gpg_verify=1
         all_in_one=0
@@ -77,6 +79,7 @@ function parse_params() {
         md5_checksum=1
         skip_integrity_check=0
         use_release_iso=0
+        image_type='22.04'
 
         while :; do
                 case "${1-}" in
@@ -104,6 +107,22 @@ function parse_params() {
                         meta_data_file="${2-}"
                         shift
                         ;;
+                -i | --image-type)
+                        case "${2-}" in
+                        nobel|jammy|focal|24.04|22.04|20.04|2404|2204|2004)
+                                case "${2-}" in
+                                24.04 | 2404) image_type="nobel" ;;
+                                22.04 | 2204) image_type="jammy" ;;
+                                20.04 | 2004) image_type="focal" ;;
+                                *) image_type="${2-}" ;;
+                                esac
+                                shift
+                                ;;
+                        *)
+                                die "Invalid image type: ${2-}. Accepted values are nobel, jammy, focal, 24.04, 22.04, 20.04, 2404, 2204, or 2004."
+                                ;;
+                        esac
+                        ;;
                 -?*) die "Unknown option: $1" ;;
                 *) break ;;
                 esac
@@ -113,10 +132,14 @@ function parse_params() {
         log "👶 Starting up..."
 
         # check required params and arguments
+        if [[ -n "${use_release_iso}" || (-z "${source_iso}" && -z "${use_release_iso}") ]]; then
+                [[ -z "${image_type}" ]] && die "💥 image type not defined. Accepted values are nobel, jammy, focal, 24.04, 22.04, 20.04, 2404, 2204, or 2004."
+        fi
+
         if [ ${all_in_one} -ne 0 ]; then
                 [[ -z "${user_data_file}" ]] && die "💥 user-data file was not specified."
                 [[ ! -f "$user_data_file" ]] && die "💥 user-data file could not be found."
-                [[ -n "${meta_data_file}" ]] && [[ ! -f "$meta_data_file" ]] && die "💥 meta-data file could not be found."
+                [[ -n "${meta_data_file}" ]] && [[ ! -f "${meta_data_file}" ]] && die "💥 meta-data file could not be found."
         fi
 
         if [ "${source_iso}" != "${script_dir}/${original_iso}" ]; then
@@ -124,9 +147,9 @@ function parse_params() {
         fi
 
         if [ "${use_release_iso}" -eq 1 ]; then
-                download_url="https://releases.ubuntu.com/focal"
+                download_url="https://releases.ubuntu.com/${image_type}"
                 log "🔎 Checking for current release..."
-                download_iso=$(curl -sSL "${download_url}" | grep -oP 'ubuntu-20\.04\.\d*-live-server-amd64\.iso' | head -n 1)
+                download_iso=$(curl -sSL "${download_url}" | grep -oP 'ubuntu-2[0|2|4]\.04\.?\d*-live-server-amd64\.iso' | head -n 1)
                 original_iso="${download_iso}"
                 source_iso="${script_dir}/${download_iso}"
                 current_release=$(echo "${download_iso}" | cut -f2 -d-)
@@ -140,16 +163,19 @@ function parse_params() {
         return 0
 }
 
+is_isolinux=false
+isolinux_version="bionic,focal"
+
 ubuntu_gpg_key_id="843938DF228D22F7B3742BC0D94AA3F0EFE21092"
 
 parse_params "$@"
 
 tmpdir=$(mktemp -d)
 
-if [[ ! "$tmpdir" || ! -d "$tmpdir" ]]; then
+if [[ ! "${tmpdir}" || ! -d "${tmpdir}" ]]; then
         die "💥 Could not create temporary working directory."
 else
-        log "📁 Created temporary working directory $tmpdir"
+        log "📁 Created temporary working directory ${tmpdir}"
 fi
 
 log "🔎 Checking for required utilities..."
@@ -157,11 +183,12 @@ log "🔎 Checking for required utilities..."
 [[ ! -x "$(command -v sed)" ]] && die "💥 sed is not installed. On Ubuntu, install the 'sed' package."
 [[ ! -x "$(command -v curl)" ]] && die "💥 curl is not installed. On Ubuntu, install the 'curl' package."
 [[ ! -x "$(command -v gpg)" ]] && die "💥 gpg is not installed. On Ubuntu, install the 'gpg' package."
+[[ ! -x "$(command -v 7z)" ]] && die "💥 7z is not installed. On Ubuntu, install the 'p7zip-full' package."
 [[ ! -f "/usr/lib/ISOLINUX/isohdpfx.bin" ]] && die "💥 isolinux is not installed. On Ubuntu, install the 'isolinux' package."
 log "👍 All required utilities are installed."
 
 if [ ! -f "${source_iso}" ]; then
-        log "🌎 Downloading ISO image for Ubuntu 20.04 Focal Fossa..."
+        log "🌎 Downloading ISO image for Ubuntu ${image_type}..."
         curl -NsSL "${download_url}/${download_iso}" -o "${source_iso}"
         log "👍 Downloaded and saved to ${source_iso}"
 else
@@ -211,20 +238,29 @@ else
         log "🤞 Skipping verification of source ISO."
 fi
 log "🔧 Extracting ISO image..."
-xorriso -osirrox on -indev "${source_iso}" -extract / "$tmpdir" &>/dev/null
-chmod -R u+w "$tmpdir"
-rm -rf "$tmpdir/"'[BOOT]'
-log "👍 Extracted to $tmpdir"
+xorriso -osirrox on -indev "${source_iso}" -extract / "${tmpdir}" &>/dev/null
+chmod -R u+w "${tmpdir}"
+rm -rf "${tmpdir}/"'[BOOT]'
+log "👍 Extracted to ${tmpdir}"
+
+log "🔎 Checking for ISO version..."
+iso_version=$(head -n1 "${tmpdir}/md5sum.txt")
+if grep -q -E "${isolinux_version//,/|}" <<< "${iso_version}"; then
+        is_isolinux=true
+        log "🚩 Found 'isolinux' version"
+fi
 
 if [ ${use_hwe_kernel} -eq 1 ]; then
-        if grep -q "hwe-vmlinuz" "$tmpdir/boot/grub/grub.cfg"; then
+        if grep -q "hwe-vmlinuz" "${tmpdir}/boot/grub/grub.cfg"; then
                 log "☑️ Destination ISO will use HWE kernel."
-                sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "$tmpdir/isolinux/txt.cfg"
-                sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "$tmpdir/isolinux/txt.cfg"
-                sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "$tmpdir/boot/grub/grub.cfg"
-                sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "$tmpdir/boot/grub/grub.cfg"
-                sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "$tmpdir/boot/grub/loopback.cfg"
-                sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "$tmpdir/boot/grub/loopback.cfg"
+                if [ ${is_isolinux} = true ]; then
+                        sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "${tmpdir}/isolinux/txt.cfg"
+                        sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "${tmpdir}/isolinux/txt.cfg"
+                fi
+                sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "${tmpdir}/boot/grub/grub.cfg"
+                sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "${tmpdir}/boot/grub/grub.cfg"
+                sed -i -e 's|/casper/vmlinuz|/casper/hwe-vmlinuz|g' "${tmpdir}/boot/grub/loopback.cfg"
+                sed -i -e 's|/casper/initrd|/casper/hwe-initrd|g' "${tmpdir}/boot/grub/loopback.cfg"
         else
                 log "⚠️ This source ISO does not support the HWE kernel. Proceeding with the regular kernel."
         fi
@@ -233,49 +269,67 @@ fi
 
 if [ ${skip_integrity_check} -eq 1 ]; then
         log "🧩 Adding skip integrity check parameter to kernel command line..."
-        sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/isolinux/txt.cfg"
-        sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/boot/grub/grub.cfg"
-        sed -i -e 's/---/ fsck.mode=skip  ---/g' "$tmpdir/boot/grub/loopback.cfg"
+        if [ ${is_isolinux} = true ]; then
+                sed -i -e 's/---/ fsck.mode=skip  ---/g' "${tmpdir}/isolinux/txt.cfg"
+        fi
+        sed -i -e 's/---/ fsck.mode=skip  ---/g' "${tmpdir}/boot/grub/grub.cfg"
+        sed -i -e 's/---/ fsck.mode=skip  ---/g' "${tmpdir}/boot/grub/loopback.cfg"
         log "👍 Added parameter to UEFI and BIOS kernel command lines."
 fi
 
 log "🧩 Adding autoinstall parameter to kernel command line..."
-sed -i -e 's/---/ autoinstall  ---/g' "$tmpdir/isolinux/txt.cfg"
-sed -i -e 's/---/ autoinstall  ---/g' "$tmpdir/boot/grub/grub.cfg"
-sed -i -e 's/---/ autoinstall  ---/g' "$tmpdir/boot/grub/loopback.cfg"
+if [ ${is_isolinux} = true ]; then
+        sed -i -e 's/---/ autoinstall  ---/g' "${tmpdir}/isolinux/txt.cfg"
+fi
+sed -i -e 's/---/ autoinstall  ---/g' "${tmpdir}/boot/grub/grub.cfg"
+sed -i -e 's/---/ autoinstall  ---/g' "${tmpdir}/boot/grub/loopback.cfg"
 log "👍 Added parameter to UEFI and BIOS kernel command lines."
 
 if [ ${all_in_one} -eq 1 ]; then
         log "🧩 Adding user-data and meta-data files..."
-        mkdir "$tmpdir/nocloud"
-        cp "$user_data_file" "$tmpdir/nocloud/user-data"
+        mkdir "${tmpdir}/nocloud"
+        cp "$user_data_file" "${tmpdir}/nocloud/user-data"
         if [ -n "${meta_data_file}" ]; then
-                cp "$meta_data_file" "$tmpdir/nocloud/meta-data"
+                cp "$meta_data_file" "${tmpdir}/nocloud/meta-data"
         else
-                touch "$tmpdir/nocloud/meta-data"
+                touch "${tmpdir}/nocloud/meta-data"
         fi
-        sed -i -e 's,---, ds=nocloud;s=/cdrom/nocloud/  ---,g' "$tmpdir/isolinux/txt.cfg"
-        sed -i -e 's,---, ds=nocloud\\\;s=/cdrom/nocloud/  ---,g' "$tmpdir/boot/grub/grub.cfg"
-        sed -i -e 's,---, ds=nocloud\\\;s=/cdrom/nocloud/  ---,g' "$tmpdir/boot/grub/loopback.cfg"
+        if [ ${is_isolinux} = true ]; then
+                sed -i -e 's,---, ds=nocloud;s=/cdrom/nocloud/  ---,g' "${tmpdir}/isolinux/txt.cfg"
+        fi
+        sed -i -e 's,---, ds=nocloud\\\;s=/cdrom/nocloud/  ---,g' "${tmpdir}/boot/grub/grub.cfg"
+        sed -i -e 's,---, ds=nocloud\\\;s=/cdrom/nocloud/  ---,g' "${tmpdir}/boot/grub/loopback.cfg"
         log "👍 Added data and configured kernel command line."
 fi
 
 if [ ${md5_checksum} -eq 1 ]; then
-        log "👷 Updating $tmpdir/md5sum.txt with hashes of modified files..."
-        md5=$(md5sum "$tmpdir/boot/grub/grub.cfg" | cut -f1 -d ' ')
-        sed -i -e 's,^.*[[:space:]] ./boot/grub/grub.cfg,'"$md5"'  ./boot/grub/grub.cfg,' "$tmpdir/md5sum.txt"
-        md5=$(md5sum "$tmpdir/boot/grub/loopback.cfg" | cut -f1 -d ' ')
-        sed -i -e 's,^.*[[:space:]] ./boot/grub/loopback.cfg,'"$md5"'  ./boot/grub/loopback.cfg,' "$tmpdir/md5sum.txt"
+        log "👷 Updating ${tmpdir}/md5sum.txt with hashes of modified files..."
+        md5=$(md5sum "${tmpdir}/boot/grub/grub.cfg" | cut -f1 -d ' ')
+        sed -i -e 's,^.*[[:space:]] ./boot/grub/grub.cfg,'"$md5"'  ./boot/grub/grub.cfg,' "${tmpdir}/md5sum.txt"
+        md5=$(md5sum "${tmpdir}/boot/grub/loopback.cfg" | cut -f1 -d ' ')
+        sed -i -e 's,^.*[[:space:]] ./boot/grub/loopback.cfg,'"$md5"'  ./boot/grub/loopback.cfg,' "${tmpdir}/md5sum.txt"
         log "👍 Updated hashes."
 else
         log "🗑️ Clearing MD5 hashes..."
-        echo > "$tmpdir/md5sum.txt"
+        echo > "${tmpdir}/md5sum.txt"
         log "👍 Cleared hashes."
 fi
 
+if [ ${is_isolinux} = false ]; then
+        log "📦 Extracting from origin ISO image EFI boot data..."
+        7z e "${source_iso}" -o"${tmpdir}/boot/" '[BOOT]/1-Boot-NoEmul.img' &>/dev/null
+        7z e "${source_iso}" -o"${tmpdir}/boot/" '[BOOT]/2-Boot-NoEmul.img' &>/dev/null
+fi
+
 log "📦 Repackaging extracted files into an ISO image..."
-cd "$tmpdir"
-xorriso -as mkisofs -r -V "ubuntu-autoinstall-$today" -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -boot-info-table -input-charset utf-8 -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat -o "${destination_iso}" . &>/dev/null
+cd "${tmpdir}"
+
+if [ ${is_isolinux} = true ]; then
+        xorriso -as mkisofs -r -V "ubuntu-autoinstall-${today}" -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin -boot-info-table -input-charset utf-8 -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat -o "${destination_iso}" . &>/dev/null
+else
+        sudo xorriso -as mkisofs -r -V "ubuntu-autoinstall-${today}" --grub2-mbr "${tmpdir}/boot/1-Boot-NoEmul.img" -partition_offset 16 --mbr-force-bootable -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b "${tmpdir}/boot/2-Boot-NoEmul.img" -appended_part_as_gpt -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 -c "boot.catalog" -b "boot/grub/i386-pc/eltorito.img" -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info -eltorito-alt-boot -e '--interval:appended_partition_2:::' -no-emul-boot -o "${destination_iso}" . &>/dev/null
+fi
+
 cd "$OLDPWD"
 log "👍 Repackaged into ${destination_iso}"
 
